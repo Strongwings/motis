@@ -39,6 +39,10 @@
 #include "motis/module/event_collector.h"
 #include "motis/module/ini_io.h"
 
+#if defined(MOTIS_CUDA)
+#include "motis/tripbased/gpu/gpu_tripbased.h"
+#endif
+
 using namespace motis::module;
 using namespace motis::logging;
 using namespace motis::routing;
@@ -269,6 +273,56 @@ struct tripbased::impl {
             .Union());
     return make_msg(fbb);
   }
+
+  // TODO(sarah) explicit exclude of intermodal and pretrip?
+#if defined(MOTIS_CUDA)
+  msg_ptr route_gpu(msg_ptr const& msg) {
+    auto const req = motis_content(RoutingRequest, msg);
+
+    auto const query = build_tb_query(req, sched_);
+
+    if(query.dir_ == search_dir::BWD) {
+      // TODO(sarah): throw error, don't continue
+    }
+
+    trip_based_result res{};
+    MOTIS_START_TIMING(search_timing);
+    tb_ontrip_search<search_dir::FWD> tbs(
+        *tb_data_, sched_, query.start_time_, query.intermodal_start_,
+        query.intermodal_destination_,
+        query.use_dest_metas_ ? destination_mode::ANY : destination_mode::ALL);
+
+    add_starts_and_destinations(query, tbs);
+
+    tbs.search_gpu();
+
+    MOTIS_STOP_TIMING(search_timing);
+    tbs.get_statistics().search_duration_ = MOTIS_TIMING_MS(search_timing);
+
+    res.stats_.emplace_back(
+        to_stats_category("tripbased", tbs.get_statistics()));
+
+    build_results<search_dir::FWD>(query, res, sched_, tbs);
+
+    // TODO(sarah): check if correct as is or if need to change
+    message_creator fbb;
+    auto stats =
+        utl::to_vec(res.stats_, [&](auto const& s) {return to_fbs(fbb, s); });
+    fbb.create_and_finish(
+        MsgContent_RoutingResponse,
+        CreateRoutingResponse(
+            fbb, fbb.CreateVectorOfSortedTables(&stats),
+            fbb.CreateVector(utl::to_vec(
+                     res.journeys_,
+                     [&](journey const& j) { return to_connection(fbb, j); })),
+            static_cast<uint64_t>(
+                motis_to_unixtime(sched_, res.interval_begin_)),
+            static_cast<uint64_t>(motis_to_unixtime(sched_, res.interval_end_)),
+            fbb.CreateVector(std::vector<Offset<DirectConnection>>{}))
+            .Union());
+    return make_msg(fbb);
+  }
+#endif
 
   inline trip_based_result route_dispatch(trip_based_query const& q,
                                           schedule const& sched) {
@@ -688,6 +742,11 @@ void tripbased::init(motis::module::registry& reg) {
                     [this](msg_ptr const& m) { return impl_->route(m); });
     reg.register_op("/tripbased/debug",
                     [this](msg_ptr const& m) { return impl_->debug(m); });
+    // TODO(sarah)
+    #if defined(MOTIS_CUDA)
+      reg.register_op("/tripbased/gpu",
+                    [this](msg_ptr const& m) { return impl_->route_gpu(m);});
+    #endif
 
   } catch (std::exception const& e) {
     LOG(logging::warn) << "tripbased module not initialized (" << e.what()

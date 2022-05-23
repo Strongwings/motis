@@ -18,6 +18,10 @@
 #include "motis/tripbased/tb_search_common.h"
 #include "motis/tripbased/tb_statistics.h"
 
+#if defined(MOTIS_CUDA)
+#include "motis/tripbased/gpu/gpu_tripbased.h"
+#endif
+
 namespace motis::tripbased {
 
 template <search_dir Dir = search_dir::FWD>
@@ -111,6 +115,16 @@ struct tb_ontrip_search {
           std::max(stats_.max_queue_size_, static_cast<uint64_t>(size));
     }
   }
+#if defined(MOTIS_CUDA)
+  void search_gpu() {
+    journeys_.resize(sched_.stations_.size());
+    earliest_arrival_.resize(sched_.stations_.size(), INVALID);
+
+    add_direct_walks();
+
+    search_fwd_gpu(MAX_TRANSFERS, queues_);
+  }
+#endif
 
   std::vector<tb_journey>& get_results(station_id destination,
                                        bool reconstruct = true) {
