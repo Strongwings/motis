@@ -282,7 +282,7 @@ struct tripbased::impl {
     auto const query = build_tb_query(req, sched_);
 
     if(query.dir_ == search_dir::BWD) {
-      // TODO(sarah): throw error, don't continue
+      throw std::system_error(error::not_implemented);
     }
 
     trip_based_result res{};
