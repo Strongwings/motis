@@ -5,7 +5,7 @@ include_directories(include)
 
 file(GLOB_RECURSE motis-tripbased-files src/*.cc)
 
-add_library(motis-tripbased STATIC ${motis-tripbased-files} include/motis/tripbased/gpu/gpu_tripbased.h src/gpu/gpu_tripbased.cu)
+add_library(motis-tripbased STATIC ${motis-tripbased-files})
 target_include_directories(motis-tripbased PUBLIC include)
 target_link_libraries(motis-tripbased
   boost-system
@@ -37,5 +37,5 @@ if (MOTIS_CUDA)
     target_include_directories(gpu-tripbased PRIVATE include)
     set_property(TARGET gpu-tripbased PROPERTY CUDA_ARCHITECTURES 75 61)
     target_compile_options(gpu-tripbased PRIVATE "--expt-relaxed-constexpr")
-    target_link_libraries(motis-tripbased gpu-raptor CUDA::cudart_static)
+    target_link_libraries(motis-tripbased gpu-tripbased CUDA::cudart_static)
 endif ()
