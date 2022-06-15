@@ -20,6 +20,7 @@
 
 #if defined(MOTIS_CUDA)
 #include "motis/tripbased/gpu/gpu_tripbased.h"
+#include "motis/tripbased/gpu/gpu_timetable.h"
 #endif
 
 namespace motis::tripbased {
@@ -122,7 +123,15 @@ struct tb_ontrip_search {
 
     add_direct_walks();
 
-    search_fwd_gpu(MAX_TRANSFERS, queues_);
+    // TODO(sarah)
+
+    gpu_timetable gpu_tt = gpu_timetable(destination_arrivals_,
+                                         data_.arrival_times_,
+                                         total_earliest_arrival_,
+                                         data_.line_stop_count_,
+                                         data_.transfers_);
+
+    search_fwd_gpu(MAX_TRANSFERS, gpu_tt.ptrs_);
   }
 #endif
 
