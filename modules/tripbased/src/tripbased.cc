@@ -304,7 +304,6 @@ struct tripbased::impl {
 
     build_results<search_dir::FWD>(query, res, sched_, tbs);
 
-    // TODO(sarah): check if correct as is or if need to change
     message_creator fbb;
     auto stats =
         utl::to_vec(res.stats_, [&](auto const& s) {return to_fbs(fbb, s); });
@@ -343,6 +342,7 @@ struct tripbased::impl {
     if (q.is_ontrip()) {
       return route_ontrip_station<Dir>(q, sched);
     } else {
+
       return route_pretrip<Dir>(q, sched);
     }
   }
