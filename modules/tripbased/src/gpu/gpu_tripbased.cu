@@ -4,11 +4,25 @@
 
 namespace motis::tripbased {
 
+#define cucheck_dev(call)                                    \
+  {                                                          \
+    cudaError_t cucheck_err = (call);                        \
+    if (cucheck_err != cudaSuccess) {                        \
+      const char* err_str = cudaGetErrorString(cucheck_err); \
+      printf("%s (%d): %s\n", __FILE__, __LINE__, err_str);  \
+    }                                                        \
+  }
+
+#define cuda_check() \
+  { cucheck_dev(cudaGetLastError()); }
+
 #define CUDA_ALLOC(target, size) \
-  cudaMalloc((void**) &(target), size);
+  cudaMalloc((void**) &(target), size); \
+  cuda_check();
 
 #define CUDA_COPY(target, source, size, copy_type) \
-  cudaMemcpy(target, source, size, copy_type);
+  cudaMemcpy(target, source, size, copy_type);     \
+  cuda_check();
 
 #define CUDA_ALLOC_COPY(target, source, size)   \
   CUDA_ALLOC(target, size)                      \
@@ -29,11 +43,11 @@ __global__ void check_dominated(gpu_device_pointers pointers) {
       pointers.is_dominated_device_[idx2] = 1;
     }
   } else if (journey1.transfers_ > journey2.transfers_) {
-    if(journey1.arrival_time_ > journey2.arrival_time_) {
+    if(journey1.arrival_time_ >= journey2.arrival_time_) {
       pointers.is_dominated_device_[idx1] = 1;
     }
   } else { // journey2.transfers_ < journey2.transfers_
-    if (journey1.arrival_time_ < journey2.arrival_time_) {
+    if (journey1.arrival_time_ <= journey2.arrival_time_) {
       pointers.is_dominated_device_[idx2] = 1;
     }
   }
@@ -51,6 +65,10 @@ __device__ void destination_reached(gpu_device_pointers pointers,
                                                   .index_[queue_entry.trip_]
                                               + dest_arrival.stop_index_]
         + dest_arrival.fp_duration_;
+  // TODO(sarah): following 3 lines only for version 2
+  if (arrival_time < *pointers.total_earliest_arrival_device_) {
+    atomicMin(pointers.total_earliest_arrival_device_, arrival_time);
+  }
   pointers.result_set_device_[set_entry_index]
       = gpu_tb_journey{*pointers.start_time_device_,
                        arrival_time,
@@ -59,7 +77,6 @@ __device__ void destination_reached(gpu_device_pointers pointers,
                        dest_arrival.fp_to_station_id_,
                        dest_arrival,
                        entry_num};
-  //std::printf("1\n");
 }
 
 __device__ void enqueue(gpu_device_pointers const pointers,
@@ -68,16 +85,18 @@ __device__ void enqueue(gpu_device_pointers const pointers,
                         unsigned transfers,
                         std::size_t prev_trip_seg) {
   auto const old_first_reachable = pointers.first_reachable_stop_device_[trip];
+  // TODO(sarah): following if statement only for Version 2
   if (stop_idx < old_first_reachable) {
     unsigned queue_entry_index = atomicAdd(&pointers.queue_sizes_device_[transfers+1], 1U);
     pointers.queue_device_[pointers.queue_index_device_[transfers + 1] + queue_entry_index]
-        = gpu_queue_entry{trip, stop_idx, old_first_reachable, prev_trip_seg};
+        = gpu_queue_entry{trip, stop_idx, (uint16_t)old_first_reachable, prev_trip_seg};
     auto const line = pointers.trip_to_line_device_[trip];
     for (uint32_t t = trip;
          t < *pointers.trip_count_device_ && pointers.trip_to_line_device_[t] == line;
          ++t) {
+      // TODO(sarah): following 3 lines only for Version 2
       if (stop_idx < pointers.first_reachable_stop_device_[t]) {
-        pointers.first_reachable_stop_device_[t] = stop_idx;
+        atomicMin(&pointers.first_reachable_stop_device_[t], stop_idx);
       }
     }
   }
@@ -117,6 +136,7 @@ __global__ void search(gpu_device_pointers const pointers,
                                                 .index_[entry.trip_]
                                             + entry.from_stop_index_ + 1];
 
+  // TODO(sarah): following if statement only for Version 2
   if (next_stop_arrival_times < *pointers.total_earliest_arrival_device_) {
     auto const stop_count =
         std::min(entry.to_stop_index_,
@@ -146,18 +166,36 @@ gpu_search_results search_fwd_gpu(unsigned const max_transfers,
   for (auto transfers = 0U; transfers <= max_transfers; ++transfers) {
     CUDA_COPY(&queue_sizes[transfers],
               &pointers.queue_sizes_device_[transfers],
-              sizeof(std::size_t),
+              sizeof(unsigned),
               cudaMemcpyDeviceToHost)
+
+    // TODO(sarah) testing
+    /*std::vector<std::size_t> queue_index = {0, 3750000, 7500000, 11250000,
+                                            15000000, 18750000, 22500000, 26250000};
+    std::vector<gpu_queue_entry> test;
+    test.resize(queue_sizes[transfers]);
+    CUDA_COPY(test.data(),
+              &pointers.queue_device_[queue_index[transfers]],
+              queue_sizes[transfers] * sizeof(gpu_queue_entry),
+              cudaMemcpyDeviceToHost)*/
+
     // TODO(sarah)
     unsigned thread_num = queue_sizes[transfers];
     unsigned block_num = 1;
     if(thread_num > 32) {
       block_num = (thread_num + 31) / 32;
       thread_num = 32;
+    } else if (thread_num == 0) {
+      break;
     }
+    std::cout << queue_sizes[transfers] << " ; " <<
+        block_num << " , " << thread_num << std::endl;
     search<<<block_num, thread_num>>>
         (pointers, transfers, max_transfers);
     cudaDeviceSynchronize();
+
+    // TODO(sarah): leave check here?
+    cuda_check();
   }
 
 
@@ -173,10 +211,10 @@ gpu_search_results search_fwd_gpu(unsigned const max_transfers,
                                           15000000, 18750000, 22500000, 26250000};
 
   results.gpu_final_queues_.resize(max_transfers + 1);
-  for (auto transfers = 0U; transfers <= max_transfers; ++ transfers) {
+  for (std::size_t transfers = 0; transfers <= max_transfers; ++transfers) {
     results.gpu_final_queues_[transfers].resize(queue_sizes[transfers]);
     CUDA_COPY(results.gpu_final_queues_[transfers].data(),
-              pointers.queue_device_ + queue_index[transfers],
+              &pointers.queue_device_[queue_index[transfers]],
               queue_sizes[transfers] * sizeof(gpu_queue_entry),
               cudaMemcpyDeviceToHost)
   }
@@ -186,34 +224,41 @@ gpu_search_results search_fwd_gpu(unsigned const max_transfers,
             pointers.result_set_size_device_,
             sizeof(unsigned),
             cudaMemcpyDeviceToHost)
-  std::cout << result_set_size << std::endl;
 
   unsigned thread_num = result_set_size;
+
+  if (result_set_size == 0) {
+    return results;
+  }
+
   unsigned block_num = 1;
   if(thread_num > 32) {
     block_num = (thread_num + 31) / 32;
     thread_num = 32;
   }
+  std::cout << block_num << " , " << thread_num << std::endl;
   check_dominated<<<block_num, thread_num>>>(pointers);
   cudaDeviceSynchronize();
+  cuda_check();
 
   results.gpu_result_journeys_.resize(result_set_size);
   CUDA_COPY(results.gpu_result_journeys_.data(),
             pointers.result_set_device_,
             result_set_size * sizeof(gpu_tb_journey),
             cudaMemcpyDeviceToHost)
-  std::cout << results.gpu_result_journeys_.size() << std::endl;
 
   results.gpu_is_dominated_.resize(result_set_size);
   CUDA_COPY(results.gpu_is_dominated_.data(),
             pointers.is_dominated_device_,
             result_set_size * sizeof(uint8_t),
             cudaMemcpyDeviceToHost)
-  std::cout << results.gpu_is_dominated_.size() << std::endl;
+  //cudaDeviceSynchronize();
+  // TODO(sarah): ^ necessary?
 
   return results;
 }
 
+// TODO(sarah): cleanup unnecessary params? Probably still needed for Version 1
 gpu_device_pointers allocate_and_copy_on_device(
     std::vector<std::vector<gpu_dest_arrival>> dest_arrs,
     gpu_fws_multimap_arrival_times arrival_times,
@@ -227,8 +272,7 @@ gpu_device_pointers allocate_and_copy_on_device(
     uint16_t* first_reachable_stop,
     std::size_t first_reachable_stop_size,
     uint64_t trip_count,
-    gpu_queue_entry* initial_queue,
-    std::size_t initial_queue_size,
+    std::vector<gpu_queue_entry> initial_queue,
     unsigned max_transfers) {
 
   gpu_device_pointers pointers;
@@ -236,7 +280,6 @@ gpu_device_pointers allocate_and_copy_on_device(
   std::size_t dest_arrivals_size = dest_arrs.size();
 
   std::vector<std::size_t> dest_arrivals_index;
-  //dest_arrivals_index.resize(dest_arrivals_size + 1);
   dest_arrivals_index.emplace_back(0);
 
   std::size_t dest_arrs_size = 0;
@@ -246,6 +289,7 @@ gpu_device_pointers allocate_and_copy_on_device(
   }
   CUDA_ALLOC(pointers.dest_arrivals_device_,
              dest_arrs_size * sizeof(gpu_dest_arrival))
+  cudaDeviceSynchronize();
   for (auto i = 0; i < dest_arrivals_size; ++i) {
     std::vector<gpu_dest_arrival> dest_arr = dest_arrs[i];
     CUDA_COPY(&pointers.dest_arrivals_device_[dest_arrivals_index[i]],
@@ -257,17 +301,6 @@ gpu_device_pointers allocate_and_copy_on_device(
                   dest_arrivals_index.data(),
                   dest_arrivals_index.size() * sizeof(std::size_t))
 
-  std::vector<std::size_t> test2;
-  test2.resize(dest_arrivals_index.size());
-  CUDA_COPY(test2.data(), pointers.dest_arrivals_index_device_,
-            dest_arrivals_index.size() * sizeof(std::size_t), cudaMemcpyDeviceToHost)
-  for(auto i = 0; i < test2.size() - 1; ++i) {
-    if (test2[i + 1] > test2[i]) {
-      //std::printf("test");
-      std::cout << i << std::endl;
-    }
-  }
-
   CUDA_ALLOC_COPY(pointers.arrival_times_device_.data_,
             arrival_times.data_,
             arrival_times.index_[*arrival_times.index_size_ - 1] * sizeof(uint16_t))
@@ -278,13 +311,21 @@ gpu_device_pointers allocate_and_copy_on_device(
             &arrival_times.index_size_,
             sizeof(std::size_t))
 
+  // TODO(sarah): following 4 lines only for Version 2
+  int total_earliest_init = std::numeric_limits<uint16_t>::max();
   CUDA_ALLOC_COPY(pointers.total_earliest_arrival_device_,
+                  &total_earliest_init,
+                  sizeof(int))
+  /*CUDA_ALLOC_COPY(pointers.total_earliest_arrival_device_,
                   &total_earliest_arrival,
-                  sizeof(uint16_t))
+                  sizeof(uint16_t))*/
 
   CUDA_ALLOC_COPY(pointers.line_stop_count_device_,
                   line_stop_count,
                   line_stop_count_size * sizeof(uint16_t))
+  auto test5 = *transfers.index_size_;
+  auto test6 = *transfers.base_index_size_;
+  auto test7 = transfers.index_[*transfers.index_size_ - 1];
 
   CUDA_ALLOC_COPY(pointers.transfers_device.data_,
             transfers.data_,
@@ -310,9 +351,15 @@ gpu_device_pointers allocate_and_copy_on_device(
                   &start_time,
                   sizeof(uint16_t))
 
+  // TODO(sarah): following 5 lines only for Version 2
+  std::vector<int> first_reachable_init(first_reachable_stop_size,
+                                        std::numeric_limits<uint16_t>::max());
   CUDA_ALLOC_COPY(pointers.first_reachable_stop_device_,
+                  first_reachable_init.data(),
+                  first_reachable_stop_size * sizeof(int))
+  /*CUDA_ALLOC_COPY(pointers.first_reachable_stop_device_,
                   first_reachable_stop,
-                  first_reachable_stop_size * sizeof(uint16_t))
+                  first_reachable_stop_size * sizeof(uint16_t))*/
 
   CUDA_ALLOC_COPY(pointers.trip_count_device_,
                   &trip_count,
@@ -321,15 +368,11 @@ gpu_device_pointers allocate_and_copy_on_device(
   std::size_t queue_size = 30000000 * sizeof(gpu_queue_entry);
   CUDA_ALLOC(pointers.queue_device_,
              queue_size)
+  cudaDeviceSynchronize();
   CUDA_COPY(pointers.queue_device_,
-            initial_queue,
-            initial_queue_size * sizeof(gpu_queue_entry),
+            initial_queue.data(),
+            initial_queue.size() * sizeof(gpu_queue_entry),
             cudaMemcpyHostToDevice)
-
-  std::vector<gpu_queue_entry> test;
-  test.resize(initial_queue_size);
-  cudaMemcpy(test.data(), pointers.queue_device_,
-             initial_queue_size * sizeof(gpu_queue_entry), cudaMemcpyDeviceToHost);
 
   std::vector<std::size_t> queue_index = {0, 3750000, 7500000, 11250000,
                                           15000000, 18750000, 22500000, 26250000};
@@ -338,13 +381,22 @@ gpu_device_pointers allocate_and_copy_on_device(
                   queue_index.size() * sizeof(std::size_t))
 
   std::vector<unsigned> used_queue_sizes(max_transfers + 1);
-  used_queue_sizes[0] = initial_queue_size;
+  used_queue_sizes[0] = initial_queue.size();
   CUDA_ALLOC(pointers.queue_sizes_device_,
              used_queue_sizes.size() * sizeof(unsigned));
+  cudaDeviceSynchronize();
   CUDA_COPY(pointers.queue_sizes_device_,
             used_queue_sizes.data(),
             used_queue_sizes.size() * sizeof(unsigned),
             cudaMemcpyHostToDevice);
+
+  // TODO(sarah) testing
+  std::vector<gpu_queue_entry> test;
+  test.resize(initial_queue.size());
+  CUDA_COPY(test.data(),
+            pointers.queue_device_,
+            initial_queue.size() * sizeof(gpu_queue_entry),
+            cudaMemcpyDeviceToHost)
 
   // TODO(sarah): size enough?
   std::size_t result_set_alloc_num = 1000;

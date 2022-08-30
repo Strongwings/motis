@@ -66,12 +66,16 @@ struct gpu_device_pointers {
   gpu_dest_arrival* dest_arrivals_device_;
   std::size_t* dest_arrivals_index_device_;
   gpu_fws_multimap_arrival_times arrival_times_device_;
-  uint16_t* total_earliest_arrival_device_;
+  // TODO(sarah): following line only for Version 2
+  int* total_earliest_arrival_device_;
+  //uint16_t* total_earliest_arrival_device_;
   uint16_t* line_stop_count_device_;
   gpu_nested_fws_multimap_transfers transfers_device;
   uint32_t* trip_to_line_device_;
   uint16_t* start_time_device_;
-  uint16_t* first_reachable_stop_device_;
+  // TODO(sarah): following line only for Version 2
+  int* first_reachable_stop_device_;
+  //uint16_t* first_reachable_stop_device_;
   uint64_t* trip_count_device_;
   gpu_queue_entry* queue_device_;
   std::size_t* queue_index_device_;
@@ -103,8 +107,7 @@ gpu_device_pointers allocate_and_copy_on_device(
     uint16_t* first_reachable_stop,
     std::size_t first_reachable_stop_size,
     uint64_t trip_count,
-    gpu_queue_entry* initial_queue,
-    std::size_t initial_queue_size,
+    std::vector<gpu_queue_entry> initial_queue,
     unsigned max_transfers);
 
 void free_on_device(gpu_device_pointers pointers);

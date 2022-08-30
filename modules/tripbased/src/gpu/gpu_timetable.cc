@@ -74,8 +74,7 @@ gpu_timetable::gpu_timetable(std::vector<std::vector<destination_arrival>> dest_
                                       first_reachable_stop.data(),
                                       first_reachable_stop.size(),
                                       trip_count,
-                                      gpu_initial_queue.data(),
-                                      gpu_initial_queue.size(),
+                                      gpu_initial_queue,
                                       max_transfers);
 }
 

@@ -287,6 +287,9 @@ struct tripbased::impl {
 
     trip_based_result res{};
     MOTIS_START_TIMING(search_timing);
+
+    // TODO(sarah) exclusion of intermodal (-> is per default)
+    //  and meta stations (-> start is per default, dest not)?
     tb_ontrip_search<search_dir::FWD> tbs(
         *tb_data_, sched_, query.start_time_, query.intermodal_start_,
         query.intermodal_destination_,
@@ -298,6 +301,9 @@ struct tripbased::impl {
 
     MOTIS_STOP_TIMING(search_timing);
     tbs.get_statistics().search_duration_ = MOTIS_TIMING_MS(search_timing);
+
+    // TODO(sarah): print for timing
+    std::cout << "Time in seconds: " << (tbs.get_statistics().search_duration_ / 1000.0) << std::endl;
 
     res.stats_.emplace_back(
         to_stats_category("tripbased", tbs.get_statistics()));
@@ -742,7 +748,6 @@ void tripbased::init(motis::module::registry& reg) {
                     [this](msg_ptr const& m) { return impl_->route(m); });
     reg.register_op("/tripbased/debug",
                     [this](msg_ptr const& m) { return impl_->debug(m); });
-    // TODO(sarah)
     #if defined(MOTIS_CUDA)
       reg.register_op("/tripbased/gpu",
                     [this](msg_ptr const& m) { return impl_->route_gpu(m);});
