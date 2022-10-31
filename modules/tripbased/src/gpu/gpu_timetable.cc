@@ -4,19 +4,13 @@
 
 namespace motis::tripbased {
 
-gpu_timetable::gpu_timetable(std::vector<std::vector<destination_arrival>> dest_arrivals,
-                             fws_multimap<motis::time> arrival_times,
-                             time total_earliest_arrival,
+gpu_timetable::gpu_timetable(fws_multimap<motis::time> arrival_times,
                              mcd::vector<stop_idx_t> line_stop_count,
                              nested_fws_multimap<tb_transfer> transfers,
                              mcd::vector<line_id> trip_to_line,
-                             time start_time,
-                             std::vector<stop_idx_t> first_reachable_stop,
-                             uint64_t trip_count,
-                             std::vector<queue_entry> initial_queue,
-                             unsigned max_transfers) {
+                             uint64_t trip_count) {
 
-  unsigned test = 0;
+  /*unsigned test = 0;
   std::vector<std::vector<gpu_dest_arrival>> gpu_dest_arrivals;
   for(auto const &dest_arrs : dest_arrivals) {
     std::vector<gpu_dest_arrival> gpu_dest_arrs;
@@ -31,7 +25,7 @@ gpu_timetable::gpu_timetable(std::vector<std::vector<destination_arrival>> dest_
       ++test;
     }
     gpu_dest_arrivals.emplace_back(gpu_dest_arrs);
-  }
+  }*/
 
   gpu_fws_multimap_arrival_times gpu_arrival_times;
   gpu_arrival_times.data_ = arrival_times.data_.data();
@@ -52,34 +46,62 @@ gpu_timetable::gpu_timetable(std::vector<std::vector<destination_arrival>> dest_
   std::size_t t_index_size = transfers.index_.size();
   gpu_transfers.index_size_ = &t_index_size;
 
-  std::vector<gpu_queue_entry> gpu_initial_queue;
+  /*std::vector<gpu_queue_entry> gpu_initial_queue;
   for(auto qe : initial_queue) {
     gpu_initial_queue.emplace_back(gpu_queue_entry{qe.trip_,
                                                    qe.from_stop_index_,
                                                    qe.to_stop_index_,
                                                    qe.previous_trip_segment_});
-  }
+  }*/
 
   // TODO(sarah)
 
-  ptrs_ = allocate_and_copy_on_device(gpu_dest_arrivals,
-                                      gpu_arrival_times,
-                                      total_earliest_arrival,
+  ptrs_ = allocate_and_copy_on_device(gpu_arrival_times,
                                       line_stop_count.data(),
                                       line_stop_count.size(),
                                       gpu_transfers,
                                       trip_to_line.data(),
                                       trip_to_line.size(),
-                                      start_time,
-                                      first_reachable_stop.data(),
-                                      first_reachable_stop.size(),
-                                      trip_count,
-                                      gpu_initial_queue,
-                                      max_transfers);
+                                      trip_count);
 }
 
-gpu_timetable::~gpu_timetable() {
+/*gpu_timetable::~gpu_timetable() {
   free_on_device(ptrs_);
+}*/
+
+gpu_device_query_pointers create_query_pointers(
+    gpu_device_pointers pointers,
+    std::vector<std::vector<destination_arrival>> dest_arrivals,
+    uint64_t trip_count,
+    std::vector<queue_entry> initial_queue) {
+
+  std::vector<std::vector<gpu_dest_arrival>> gpu_dest_arrivals;
+  for(auto const &dest_arrs : dest_arrivals) {
+    std::vector<gpu_dest_arrival> gpu_dest_arrs;
+    for(auto const &dest_arr : dest_arrs) {
+      gpu_dest_arrs.emplace_back(
+          gpu_dest_arrival{
+              dest_arr.line_,
+              dest_arr.stop_index_,
+              dest_arr.footpath_.from_stop_,
+              dest_arr.footpath_.to_stop_,
+              dest_arr.footpath_.duration_});
+    }
+    gpu_dest_arrivals.emplace_back(gpu_dest_arrs);
+  }
+
+  std::vector<gpu_queue_entry> gpu_initial_queue;
+  for(auto qe : initial_queue) {
+    gpu_initial_queue.emplace_back(
+        gpu_queue_entry{qe.trip_, qe.from_stop_index_, qe.to_stop_index_,
+                        qe.previous_trip_segment_});
+  }
+
+  return allocate_and_copy_on_device_query(pointers,
+                                           gpu_dest_arrivals,
+                                           gpu_initial_queue,
+                                           trip_count);
+
 }
 
 } // namespace motis::tripbased

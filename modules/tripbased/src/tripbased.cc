@@ -247,7 +247,13 @@ void add_result(std::vector<tb_journey>& results, tb_journey const& tbj,
 
 struct tripbased::impl {
   explicit impl(schedule const& sched, std::unique_ptr<tb_data> data)
-      : tb_data_{std::move(data)}, sched_{sched} {}
+      : tb_data_{std::move(data)}, sched_{sched} {
+#ifdef MOTIS_CUDA
+    gpu_tt_ = std::make_unique<gpu_timetable>(gpu_timetable(
+        tb_data_->arrival_times_, tb_data_->line_stop_count_, tb_data_->transfers_,
+        tb_data_->trip_to_line_, tb_data_->trip_count_));
+#endif
+  }
 
   msg_ptr route(msg_ptr const& msg) {
     auto const req = motis_content(RoutingRequest, msg);
@@ -281,9 +287,14 @@ struct tripbased::impl {
 
     auto const query = build_tb_query(req, sched_);
 
+    //std::cout << msg->id() << std::endl;
+
     if(query.dir_ == search_dir::BWD) {
       throw std::system_error(error::not_implemented);
     }
+
+    // TODO(sarah): line below and gpu query type even needed?
+    //trip_based_gpu_query gpu_query(query, *gpu_tt_);
 
     trip_based_result res{};
     MOTIS_START_TIMING(search_timing);
@@ -297,18 +308,24 @@ struct tripbased::impl {
 
     add_starts_and_destinations(query, tbs);
 
-    tbs.search_gpu();
+    tbs.search_gpu(*gpu_tt_);
+
+    //std::cout << "testing3" << std::endl;
 
     MOTIS_STOP_TIMING(search_timing);
     tbs.get_statistics().search_duration_ = MOTIS_TIMING_MS(search_timing);
 
     // TODO(sarah): print for timing
-    std::cout << "Time in seconds: " << (tbs.get_statistics().search_duration_ / 1000.0) << std::endl;
+    //std::cout << "Time in seconds: " << (tbs.get_statistics().search_duration_ / 1000.0) << std::endl;
 
     res.stats_.emplace_back(
         to_stats_category("tripbased", tbs.get_statistics()));
 
+    //std::cout << "testing4" << std::endl;
+
     build_results<search_dir::FWD>(query, res, sched_, tbs);
+
+    //std::cout << "testing5" << std::endl;
 
     message_creator fbb;
     auto stats =
@@ -684,6 +701,10 @@ struct tripbased::impl {
             .Union());
     return make_msg(fbb);
   }
+
+#ifdef MOTIS_CUDA
+  std::unique_ptr<gpu_timetable> gpu_tt_;
+#endif
 
   std::unique_ptr<tb_data> tb_data_;
   schedule const& sched_;

@@ -118,7 +118,7 @@ struct tb_ontrip_search {
     }
   }
 #if defined(MOTIS_CUDA)
-  void search_gpu() {
+  void search_gpu(gpu_timetable const& gpu_tt) {
     journeys_.resize(sched_.stations_.size());
     earliest_arrival_.resize(sched_.stations_.size(), INVALID);
 
@@ -126,20 +126,35 @@ struct tb_ontrip_search {
 
     // TODO(sarah)
 
-    gpu_timetable gpu_tt = gpu_timetable(
+    /*gpu_timetable gpu_tt = gpu_timetable(
         destination_arrivals_, data_.arrival_times_, total_earliest_arrival_,
         data_.line_stop_count_, data_.transfers_, data_.trip_to_line_,
         start_time, first_reachable_stop_, data_.trip_count_, queues_[0],
-        MAX_TRANSFERS);
+        MAX_TRANSFERS);*/
 
-    gpu_search_results gpu_sr = search_fwd_gpu(MAX_TRANSFERS, gpu_tt.ptrs_);
-    gpu_postproc_result gpu_ppr = gpu_postproc_result(gpu_sr, destination_arrivals_);
+    // TODO(sarah): where to get the timetable from? As param?
+    //  then use it to also create query pointers
+    //  use them in method call below
+
+    //std::cout << "testing0" << std::endl;
+
+    gpu_device_query_pointers q_ptrs = create_query_pointers(
+        gpu_tt.ptrs_,
+        destination_arrivals_,
+        data_.trip_count_,
+        queues_[0]);
+
+    gpu_search_results gpu_sr = search_fwd_gpu(MAX_TRANSFERS, gpu_tt.ptrs_,
+                                               q_ptrs, start_time);
+    gpu_postproc_result gpu_ppr = gpu_postproc_result(gpu_sr,
+                                                      destination_arrivals_);
     for (auto i = 0; i < gpu_ppr.queue_results_.size(); ++i) {
       queues_[i] = gpu_ppr.queue_results_[i];
     }
     for (auto j : gpu_ppr.journey_results_) {
       journeys_[j.destination_arrival_->footpath_.to_stop_].emplace_back(j);
     }
+    //std::cout << "testing2" << std::endl;
   }
 #endif
 

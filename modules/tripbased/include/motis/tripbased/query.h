@@ -4,6 +4,10 @@
 
 #include "motis/protocol/RoutingRequest_generated.h"
 
+#ifdef MOTIS_CUDA
+#include "motis/tripbased/gpu/gpu_timetable.h"
+#endif
+
 namespace motis::tripbased {
 
 struct additional_edge {
@@ -60,5 +64,16 @@ struct trip_based_query {
   std::vector<additional_edge> start_edges_;
   std::vector<additional_edge> destination_edges_;
 };
+
+// TODO(sarah): below even needed?
+#ifdef MOTIS_CUDA
+struct trip_based_gpu_query : public trip_based_query {
+  trip_based_gpu_query() = delete;
+  trip_based_gpu_query(trip_based_query const& tbq, gpu_timetable gpu_tt)
+      : trip_based_query{tbq}, gpu_tt_{gpu_tt}{};
+
+  gpu_timetable gpu_tt_;
+};
+#endif
 
 }  // namespace motis::tripbased
