@@ -33,9 +33,9 @@ namespace motis::tripbased {
   cuda_check()
 
 __global__ void check_dominated(gpu_device_pointers pointers) {
-  unsigned idx1 = threadIdx.x;
-  unsigned idx2 = threadIdx.y;
-  if (idx1 <= idx2 || idx1 >= *pointers.result_set_size_device_) {
+  unsigned idx1 = blockIdx.x * 32 + threadIdx.x;
+  unsigned idx2 = blockIdx.y * 32 + threadIdx.y;
+  if (idx1 >= idx2 || idx2 >= *pointers.result_set_size_device_) {
     return;
   }
   gpu_tb_journey journey1 = pointers.result_set_device_[idx1];
@@ -170,7 +170,7 @@ __global__ void search(gpu_device_pointers const pointers,
     }
   }
 
-  if (transfers >= max_transfers) {
+  if (transfers+1 >= max_transfers) {
     return;
   }
 
@@ -209,13 +209,13 @@ gpu_search_results search_fwd_gpu(unsigned const max_transfers,
   cuda_check()
 
   gpu_search_results results;
-  results.gpu_final_queues_.resize(max_transfers+1);
+  results.gpu_final_queues_.resize(max_transfers);
 
   //std::cout << "testing1" << std::endl;
 
-  std::vector<unsigned> queue_sizes(max_transfers+1);
+  std::vector<unsigned> queue_sizes(max_transfers);
   // TODO(sarah): <= or < ?
-  for (auto transfers = 0U; transfers <= max_transfers; ++transfers) {
+  for (auto transfers = 0U; transfers < max_transfers; ++transfers) {
     //if(transfers < max_transfers) {
       //std::cout << "loop " << transfers << std::endl;
       CUDA_COPY(&queue_sizes[transfers],
@@ -308,7 +308,7 @@ gpu_search_results search_fwd_gpu(unsigned const max_transfers,
                                           15000000, 18750000, 22500000, 26250000};;
 
   // TODO(sarah): following lines only (maybe) for Version 2
-  for (std::size_t transfers = 0; transfers <= max_transfers; ++transfers) {
+  for (std::size_t transfers = 0; transfers < max_transfers; ++transfers) {
     if (queue_sizes[transfers] == 0) {
       break;
     }
@@ -335,8 +335,10 @@ gpu_search_results search_fwd_gpu(unsigned const max_transfers,
     block_num = (thread_num + 31) / 32;
     thread_num = 32;
   }
+  dim3 block_dim(thread_num, thread_num, 1);
+  dim3 grid_dim(block_num, block_num, 1);
   //std::cout << block_num << " , " << thread_num << std::endl;
-  check_dominated<<<block_num, thread_num>>>(pointers);
+  check_dominated<<<grid_dim, block_dim>>>(pointers);
   cudaDeviceSynchronize();
   cuda_check()
 
@@ -493,7 +495,7 @@ gpu_device_pointers allocate_and_copy_on_device(
   /*std::vector<unsigned> used_queue_sizes(max_transfers, 0);
   used_queue_sizes[0] = initial_queue.size();*/
   CUDA_ALLOC(pointers.queue_sizes_device_,
-             (MAX_TRANSFERS+1) * sizeof(unsigned));
+             (MAX_TRANSFERS) * sizeof(unsigned));
   // TODO(sarah): following line needed?
   /*cudaDeviceSynchronize();
   CUDA_COPY(pointers.queue_sizes_device_,
@@ -561,7 +563,7 @@ gpu_device_query_pointers allocate_and_copy_on_device_query(
                   dest_arrivals_index.data(),
                   dest_arrivals_index.size() * sizeof(std::size_t))
 
-  std::vector<unsigned> used_queue_sizes(MAX_TRANSFERS+1, 0);
+  std::vector<unsigned> used_queue_sizes(MAX_TRANSFERS, 0);
   used_queue_sizes[0] = initial_queue.size();
   CUDA_COPY(pointers.queue_sizes_device_,
             used_queue_sizes.data(),
