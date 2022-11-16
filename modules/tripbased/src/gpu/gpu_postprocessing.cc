@@ -25,7 +25,7 @@ gpu_postproc_result::gpu_postproc_result(
     if (results.gpu_is_dominated_[i] == 0) {
       if (!dest_arrivals[res.destination_arrival_.line_id_].empty()) {
         // TODO(sarah)
-        destination_arrival& dest_arr = dest_arrivals[res.destination_arrival_.line_id_][0];
+        auto dest_arr = 0; //dest_arrivals[res.destination_arrival_.line_id_][0];
         if (dest_arrivals[res.destination_arrival_.line_id_].size() > 1) {
           auto da = dest_arrivals[res.destination_arrival_.line_id_];
           for(auto j = 0; j < da.size(); ++j) {
@@ -33,16 +33,17 @@ gpu_postproc_result::gpu_postproc_result(
                 && da[j].footpath_.from_stop_ == res.destination_arrival_.fp_from_station_id_
                 && da[j].footpath_.to_stop_ == res.destination_arrival_.fp_to_station_id_
                 && da[j].footpath_.duration_ == res.destination_arrival_.fp_duration_) {
-              dest_arr = dest_arrivals[res.destination_arrival_.line_id_][j];
+              dest_arr = j; //dest_arrivals[res.destination_arrival_.line_id_][j];
               break;
             }
           }
         }
 
         auto jny = tb_journey(search_dir::FWD, res.start_time_,
-                               res.arrival_time_, res.transfers_,
-                               res.transports_, res.destination_station_,
-                               &dest_arr, res.final_queue_entry_);
+                              res.arrival_time_, res.transfers_,
+                              res.transports_, res.destination_station_,
+                              &dest_arrivals[res.destination_arrival_.line_id_][dest_arr],
+                              res.final_queue_entry_);
         journey_results_.emplace_back(jny);
       } else {
         std::cout << "test" << std::endl;
