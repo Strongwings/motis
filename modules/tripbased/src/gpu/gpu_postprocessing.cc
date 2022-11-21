@@ -22,7 +22,8 @@ gpu_postproc_result::gpu_postproc_result(
 
   for (auto i = 0; i < results.gpu_result_journeys_.size(); ++i) {
     auto res = results.gpu_result_journeys_[i];
-    if (results.gpu_is_dominated_[i] == 0) {
+    if (results.gpu_is_dominated_[i] == 0
+        && res.arrival_time_ - res.start_time_ <= MAX_TRAVEL_TIME) {
       if (!dest_arrivals[res.destination_arrival_.line_id_].empty()) {
         // TODO(sarah)
         auto dest_arr = 0; //dest_arrivals[res.destination_arrival_.line_id_][0];
