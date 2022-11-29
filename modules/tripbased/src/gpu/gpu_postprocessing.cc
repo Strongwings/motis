@@ -1,5 +1,7 @@
 #include "motis/tripbased/gpu/gpu_postprocessing.h"
 
+#include "motis/tripbased/error.h"
+
 #ifdef MOTIS_CUDA
 
 namespace motis::tripbased {
@@ -25,8 +27,7 @@ gpu_postproc_result::gpu_postproc_result(
     if (results.gpu_is_dominated_[i] == 0
         && res.arrival_time_ - res.start_time_ <= MAX_TRAVEL_TIME) {
       if (!dest_arrivals[res.destination_arrival_.line_id_].empty()) {
-        // TODO(sarah)
-        auto dest_arr = 0; //dest_arrivals[res.destination_arrival_.line_id_][0];
+        auto dest_arr = 0;
         if (dest_arrivals[res.destination_arrival_.line_id_].size() > 1) {
           auto da = dest_arrivals[res.destination_arrival_.line_id_];
           for(auto j = 0; j < da.size(); ++j) {
@@ -34,7 +35,7 @@ gpu_postproc_result::gpu_postproc_result(
                 && da[j].footpath_.from_stop_ == res.destination_arrival_.fp_from_station_id_
                 && da[j].footpath_.to_stop_ == res.destination_arrival_.fp_to_station_id_
                 && da[j].footpath_.duration_ == res.destination_arrival_.fp_duration_) {
-              dest_arr = j; //dest_arrivals[res.destination_arrival_.line_id_][j];
+              dest_arr = j;
               break;
             }
           }
@@ -47,8 +48,7 @@ gpu_postproc_result::gpu_postproc_result(
                               res.final_queue_entry_);
         journey_results_.emplace_back(jny);
       } else {
-        std::cout << "test" << std::endl;
-        assert(false);
+        throw std::system_error(error::internal_error);
       }
     }
   }

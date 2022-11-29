@@ -10,22 +10,11 @@ gpu_timetable::gpu_timetable(fws_multimap<motis::time> arrival_times,
                              mcd::vector<line_id> trip_to_line,
                              uint64_t trip_count) {
 
-  /*unsigned test = 0;
-  std::vector<std::vector<gpu_dest_arrival>> gpu_dest_arrivals;
-  for(auto const &dest_arrs : dest_arrivals) {
-    std::vector<gpu_dest_arrival> gpu_dest_arrs;
-    for(auto const &dest_arr : dest_arrs) {
-      gpu_dest_arrs.emplace_back(
-          gpu_dest_arrival{
-              dest_arr.line_,
-              dest_arr.stop_index_,
-              dest_arr.footpath_.from_stop_,
-              dest_arr.footpath_.to_stop_,
-              dest_arr.footpath_.duration_});
-      ++test;
-    }
-    gpu_dest_arrivals.emplace_back(gpu_dest_arrs);
-  }*/
+  queue_size_ = 0;
+  for (auto i = 0; i < MAX_TRANSFERS; ++i) {
+    queue_size_ += 4000000;
+    queue_index_.emplace_back(4000000 * i);
+  }
 
   gpu_fws_multimap_arrival_times gpu_arrival_times;
   gpu_arrival_times.data_ = arrival_times.data_.data();
@@ -34,7 +23,7 @@ gpu_timetable::gpu_timetable(fws_multimap<motis::time> arrival_times,
   gpu_arrival_times.index_size_ = &at_index_size;
 
   std::vector<gpu_tb_transfer> gpu_tb_transfers;
-  for(auto trans : transfers.data_) {
+  for (auto trans : transfers.data_) {
     gpu_tb_transfers.emplace_back(gpu_tb_transfer{trans.to_trip_, trans.to_stop_idx_});
   }
   gpu_nested_fws_multimap_transfers gpu_transfers;
@@ -46,34 +35,24 @@ gpu_timetable::gpu_timetable(fws_multimap<motis::time> arrival_times,
   std::size_t t_index_size = transfers.index_.size();
   gpu_transfers.index_size_ = &t_index_size;
 
-  /*std::vector<gpu_queue_entry> gpu_initial_queue;
-  for(auto qe : initial_queue) {
-    gpu_initial_queue.emplace_back(gpu_queue_entry{qe.trip_,
-                                                   qe.from_stop_index_,
-                                                   qe.to_stop_index_,
-                                                   qe.previous_trip_segment_});
-  }*/
-
-  // TODO(sarah)
-
   ptrs_ = allocate_and_copy_on_device(gpu_arrival_times,
                                       line_stop_count.data(),
                                       line_stop_count.size(),
                                       gpu_transfers,
                                       trip_to_line.data(),
                                       trip_to_line.size(),
-                                      trip_count);
+                                      trip_count,
+                                      queue_size_,
+                                      queue_index_,
+                                      result_set_alloc_num_);
 }
-
-/*gpu_timetable::~gpu_timetable() {
-  free_on_device(ptrs_);
-}*/
 
 gpu_device_query_pointers create_query_pointers(
     gpu_device_pointers pointers,
     std::vector<std::vector<destination_arrival>> dest_arrivals,
     uint64_t trip_count,
-    std::vector<queue_entry> initial_queue) {
+    std::vector<queue_entry> initial_queue,
+    std::size_t result_set_alloc_num) {
 
   std::vector<std::vector<gpu_dest_arrival>> gpu_dest_arrivals;
   for(auto const &dest_arrs : dest_arrivals) {
@@ -100,7 +79,8 @@ gpu_device_query_pointers create_query_pointers(
   return allocate_and_copy_on_device_query(pointers,
                                            gpu_dest_arrivals,
                                            gpu_initial_queue,
-                                           trip_count);
+                                           trip_count,
+                                           result_set_alloc_num);
 
 }
 

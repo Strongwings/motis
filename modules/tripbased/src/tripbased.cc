@@ -287,20 +287,13 @@ struct tripbased::impl {
 
     auto const query = build_tb_query(req, sched_);
 
-    //std::cout << msg->id() << std::endl;
-
     if(query.dir_ == search_dir::BWD) {
       throw std::system_error(error::not_implemented);
     }
 
-    // TODO(sarah): line below and gpu query type even needed?
-    //trip_based_gpu_query gpu_query(query, *gpu_tt_);
-
     trip_based_result res{};
     MOTIS_START_TIMING(search_timing);
 
-    // TODO(sarah) exclusion of intermodal (-> is per default)
-    //  and meta stations (-> start is per default, dest not)?
     tb_ontrip_search<search_dir::FWD> tbs(
         *tb_data_, sched_, query.start_time_, query.intermodal_start_,
         query.intermodal_destination_,
@@ -310,22 +303,13 @@ struct tripbased::impl {
 
     tbs.search_gpu(*gpu_tt_);
 
-    //std::cout << "testing3" << std::endl;
-
     MOTIS_STOP_TIMING(search_timing);
     tbs.get_statistics().search_duration_ = MOTIS_TIMING_MS(search_timing);
-
-    // TODO(sarah): print for timing
-    //std::cout << "Time in seconds: " << (tbs.get_statistics().search_duration_ / 1000.0) << std::endl;
 
     res.stats_.emplace_back(
         to_stats_category("tripbased", tbs.get_statistics()));
 
-    //std::cout << "testing4" << std::endl;
-
     build_results<search_dir::FWD>(query, res, sched_, tbs);
-
-    //std::cout << "testing5" << std::endl;
 
     message_creator fbb;
     auto stats =
