@@ -7,8 +7,8 @@
 namespace motis::tripbased {
 
 gpu_postproc_result::gpu_postproc_result(
-    gpu_search_results results,
-    std::vector<std::vector<destination_arrival>>& dest_arrivals) {
+    gpu_search_results const& results,
+    std::vector<std::vector<destination_arrival>> const& dest_arrivals) {
   queue_results_.resize(results.gpu_final_queues_.size());
   for (auto i = 0; i < results.gpu_final_queues_.size(); ++i) {
     for (auto qe : results.gpu_final_queues_[i]) {
@@ -23,13 +23,13 @@ gpu_postproc_result::gpu_postproc_result(
   }
 
   for (auto i = 0; i < results.gpu_result_journeys_.size(); ++i) {
-    auto res = results.gpu_result_journeys_[i];
+    auto const& res = results.gpu_result_journeys_[i];
     if (results.gpu_is_dominated_[i] == 0
         && res.arrival_time_ - res.start_time_ <= MAX_TRAVEL_TIME) {
       if (!dest_arrivals[res.destination_arrival_.line_id_].empty()) {
         auto dest_arr = 0;
         if (dest_arrivals[res.destination_arrival_.line_id_].size() > 1) {
-          auto da = dest_arrivals[res.destination_arrival_.line_id_];
+          auto const& da = dest_arrivals[res.destination_arrival_.line_id_];
           for(auto j = 0; j < da.size(); ++j) {
             if (da[j].stop_index_ == res.destination_arrival_.stop_index_
                 && da[j].footpath_.from_stop_ == res.destination_arrival_.fp_from_station_id_

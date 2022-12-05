@@ -78,29 +78,29 @@ struct gpu_search_results {
   std::vector<uint8_t> gpu_is_dominated_;
 };
 
-gpu_search_results search_fwd_gpu(gpu_device_pointers const pointers,
-                                  gpu_device_query_pointers const query_pointers,
-                                  uint16_t const start_time,
-                                  std::vector<std::size_t> queue_index);
+gpu_search_results search_fwd_gpu(gpu_device_pointers const& pointers,
+                                  gpu_device_query_pointers const& query_pointers,
+                                  uint16_t start_time,
+                                  std::vector<std::size_t> const& queue_index);
 
 gpu_device_pointers allocate_and_copy_on_device(
-    gpu_fws_multimap_arrival_times arrival_times,
+    gpu_fws_multimap_arrival_times const& arrival_times,
     uint16_t* line_stop_count,
-    std::size_t line_stop_count_size,
-    gpu_nested_fws_multimap_transfers transfers,
+    std::size_t const& line_stop_count_size,
+    gpu_nested_fws_multimap_transfers const& transfers,
     uint32_t* trip_to_line,
-    std::size_t trip_to_line_size,
-    uint64_t trip_count,
-    std::size_t queue_size,
-    std::vector<std::size_t> queue_index,
-    std::size_t result_set_alloc_num);
+    std::size_t const& trip_to_line_size,
+    uint64_t const& trip_count,
+    std::size_t const& queue_size,
+    std::vector<std::size_t> const& queue_index,
+    std::size_t const& result_set_alloc_num);
 
 gpu_device_query_pointers allocate_and_copy_on_device_query(
-    gpu_device_pointers pointers,
-    std::vector<std::vector<gpu_dest_arrival>> dest_arrs,
-    std::vector<gpu_queue_entry> initial_queue,
-    uint64_t trip_count,
-    std::size_t result_set_alloc_num);
+    gpu_device_pointers const& pointers,
+    std::vector<std::vector<gpu_dest_arrival>> const& dest_arrs,
+    std::vector<gpu_queue_entry> const& initial_queue,
+    uint64_t const& trip_count,
+    std::size_t const& result_set_alloc_num);
 
 void free_query_on_device(gpu_device_query_pointers query_pointers);
 

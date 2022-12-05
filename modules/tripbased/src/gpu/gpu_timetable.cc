@@ -8,7 +8,7 @@ gpu_timetable::gpu_timetable(fws_multimap<motis::time> arrival_times,
                              mcd::vector<stop_idx_t> line_stop_count,
                              nested_fws_multimap<tb_transfer> transfers,
                              mcd::vector<line_id> trip_to_line,
-                             uint64_t trip_count) {
+                             uint64_t const& trip_count) {
 
   queue_size_ = 0;
   for (auto i = 0; i < MAX_TRANSFERS; ++i) {
@@ -23,7 +23,7 @@ gpu_timetable::gpu_timetable(fws_multimap<motis::time> arrival_times,
   gpu_arrival_times.index_size_ = &at_index_size;
 
   std::vector<gpu_tb_transfer> gpu_tb_transfers;
-  for (auto trans : transfers.data_) {
+  for (auto const& trans : transfers.data_) {
     gpu_tb_transfers.emplace_back(gpu_tb_transfer{trans.to_trip_, trans.to_stop_idx_});
   }
   gpu_nested_fws_multimap_transfers gpu_transfers;
@@ -48,11 +48,11 @@ gpu_timetable::gpu_timetable(fws_multimap<motis::time> arrival_times,
 }
 
 gpu_device_query_pointers create_query_pointers(
-    gpu_device_pointers pointers,
-    std::vector<std::vector<destination_arrival>> dest_arrivals,
-    uint64_t trip_count,
-    std::vector<queue_entry> initial_queue,
-    std::size_t result_set_alloc_num) {
+    gpu_device_pointers const& pointers,
+    std::vector<std::vector<destination_arrival>> const& dest_arrivals,
+    uint64_t const& trip_count,
+    std::vector<queue_entry> const& initial_queue,
+    std::size_t const& result_set_alloc_num) {
 
   std::vector<std::vector<gpu_dest_arrival>> gpu_dest_arrivals;
   for(auto const &dest_arrs : dest_arrivals) {
@@ -70,7 +70,7 @@ gpu_device_query_pointers create_query_pointers(
   }
 
   std::vector<gpu_queue_entry> gpu_initial_queue;
-  for(auto qe : initial_queue) {
+  for(auto const& qe : initial_queue) {
     gpu_initial_queue.emplace_back(
         gpu_queue_entry{qe.trip_, qe.from_stop_index_, qe.to_stop_index_,
                         qe.previous_trip_segment_});

@@ -14,8 +14,8 @@ struct gpu_postproc_result {
   std::vector<tb_journey> journey_results_;
 
   gpu_postproc_result(
-      gpu_search_results results,
-      std::vector<std::vector<destination_arrival>>& dest_arrivals);
+      gpu_search_results const& results,
+      std::vector<std::vector<destination_arrival>> const& dest_arrivals);
 };
 
 } // namespace motis::tripbased

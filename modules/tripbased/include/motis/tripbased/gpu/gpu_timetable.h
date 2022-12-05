@@ -19,15 +19,15 @@ struct gpu_timetable {
                 mcd::vector<stop_idx_t> line_stop_count,
                 nested_fws_multimap<tb_transfer> transfers,
                 mcd::vector<line_id> trip_to_line,
-                uint64_t trip_count);
+                uint64_t const& trip_count);
 };
 
 gpu_device_query_pointers create_query_pointers(
-    gpu_device_pointers pointers,
-    std::vector<std::vector<destination_arrival>> dest_arrivals,
-    uint64_t trip_count,
-    std::vector<queue_entry> initial_queue,
-    std::size_t result_set_alloc_num);
+    gpu_device_pointers const& pointers,
+    std::vector<std::vector<destination_arrival>> const& dest_arrivals,
+    uint64_t const& trip_count,
+    std::vector<queue_entry> const& initial_queue,
+    std::size_t const& result_set_alloc_num);
 
 } // namespace motis::tripbased
 
